@@ -115,8 +115,9 @@
   .form-grid { display: grid; gap: 12px; }
   .fg-3 { grid-template-columns: 1fr 1fr 1fr; }
   .fg-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
-  @media (max-width: 640px) { .fg-3, .fg-4 { grid-template-columns: 1fr 1fr; } }
-  @media (max-width: 420px) { .fg-3, .fg-4 { grid-template-columns: 1fr; } }
+  .fg-5 { grid-template-columns: 1.4fr 1.4fr 0.7fr 0.9fr 1.6fr; }
+  @media (max-width: 700px) { .fg-3, .fg-4, .fg-5 { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 420px) { .fg-3, .fg-4, .fg-5 { grid-template-columns: 1fr; } }
   .field { display: flex; flex-direction: column; gap: 6px; }
   .field label { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); }
   input[type="text"], input[type="number"], select {
@@ -228,6 +229,20 @@
   .modal p  { font-size: 14px; color: var(--text2); margin-bottom: 1.5rem; }
   .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
 
+
+  /* ─── FILTROS ─── */
+  .table-filters { display: flex; gap: 8px; flex-wrap: wrap; padding: 1rem 1.5rem 0.5rem; }
+  .filter-select { font-family: 'Barlow', sans-serif; font-size: 12px; background: var(--bg3); border: 1px solid var(--border2); border-radius: 6px; color: var(--text2); padding: 5px 10px; outline: none; cursor: pointer; }
+  .filter-select:focus { border-color: var(--accent1); }
+  .date-cell { white-space: nowrap; }
+  thead th { cursor: pointer; user-select: none; }
+  thead th:hover { color: var(--text2); }
+  .sort-icon { margin-left: 4px; opacity: .4; font-size: 10px; }
+  thead th.sorted .sort-icon { opacity: 1; color: var(--accent1); }
+  /* chart controls */
+  .chart-controls { display: flex; align-items: center; gap: 14px; margin-bottom: 1rem; flex-wrap: wrap; padding: 8px 12px; background: var(--bg3); border-radius: var(--radius); border: 1px solid var(--border); }
+  .chart-controls label { font-size: 13px; color: var(--text2); display: flex; align-items: center; gap: 7px; cursor: pointer; }
+  .chart-controls input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent1); cursor: pointer; }
   .divider { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 </style>
@@ -273,7 +288,7 @@
         <div class="step-num">2</div>
         <div class="step-body">
           <strong>Captura los tiempos</strong>
-          <span>Selecciona atleta, prueba y mes. Ingresa el tiempo en minutos, segundos y milisegundos.</span>
+          <span>Selecciona atleta, prueba, día y mes. Puedes registrar varias marcas por mes.</span>
         </div>
       </div>
       <div class="instr-step">
@@ -329,7 +344,7 @@
   <!-- PASO 2 -->
   <div class="section-label">Paso 2 — Capturar tiempo</div>
   <div class="card">
-    <div class="form-grid fg-4">
+    <div class="form-grid fg-5">
       <div class="field">
         <label>Atleta</label>
         <select id="inp-sel-name" onchange="updateEventSelect()">
@@ -341,6 +356,11 @@
         <select id="inp-sel-event">
           <option value="">— selecciona —</option>
         </select>
+      </div>
+      <div class="field">
+        <label>Día</label>
+        <input type="number" id="inp-day" placeholder="dd" min="1" max="31" step="1"
+          style="text-align:center;" oninput="clampInput(this,1,31)" />
       </div>
       <div class="field">
         <label>Mes</label>
@@ -374,6 +394,16 @@
   <!-- TABLA -->
   <div class="section-label">Registros capturados</div>
   <div class="card" style="padding:0.5rem 0;">
+    <div class="table-filters">
+      <select class="filter-select" id="filter-athlete" onchange="renderTable()"><option value="">Todos los atletas</option></select>
+      <select class="filter-select" id="filter-event" onchange="renderTable()"><option value="">Todas las pruebas</option></select>
+      <select class="filter-select" id="filter-month" onchange="renderTable()">
+        <option value="">Todos los meses</option>
+        <option>Enero</option><option>Febrero</option><option>Marzo</option><option>Abril</option>
+        <option>Mayo</option><option>Junio</option><option>Julio</option><option>Agosto</option>
+        <option>Septiembre</option><option>Octubre</option><option>Noviembre</option><option>Diciembre</option>
+      </select>
+    </div>
     <div class="table-wrap" id="table-area">
       <div class="empty" style="margin:1rem 1.5rem;">
         <div class="empty-icon">📋</div>
@@ -388,6 +418,731 @@
   <div class="section-label">Gráfica de progreso</div>
   <div class="card">
     <div class="tabs" id="tabs-area"></div>
+    <div class="chart-controls" id="chart-controls" style="display:none;">
+      <label><input type="checkbox" id="chk-best-month" onchange="rechartActive()" /> Mostrar solo mejor marca por mes</label>
+    </div>
+    <div id="chart-area">
+      <div class="empty">
+        <div class="empty-icon">📈</div>
+        Agrega al menos dos tiempos de la misma prueba para ver la gráfica.
+      </div>
+    </div>
+    <p class="chart-hint" id="chart-hint" style="display:none;">
+      ↑ línea hacia arriba = mejor tiempo &nbsp;·&nbsp;
+      punto <span style="color:#3ecf70">●</span> verde = récord personal
+    </p>
+  </div>
+
+</div>
+
+<script>
+const MONTHS=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const MONTH_IDX=Object.fromEntries(MONTHS.map((m,i)=>[m,i]));
+const LS_ATHLETES='atletracker_athletes';
+const LS_RECORDS='atletracker_records';
+let athletes=[],records=[],activeTab=null,chartInstance=null;
+let sortCol='date',sortDir='asc';
+
+function saveData(){try{localStorage.setItem(LS_ATHLETES,JSON.stringify(athletes));localStorage.setItem(LS_RECORDS,JSON.stringify(records));updateBanner();}catch(e){}}
+function loadData(){try{const a=localStorage.getItem(LS_ATHLETES);const r=localStorage.getItem(LS_RECORDS);if(a)athletes=JSON.parse(a);if(r)records=JSON.parse(r);}catch(e){athletes=[];records=[];}}
+function updateBanner(){
+  const el=document.getElementById('storage-status');
+  const t=athletes.length,r=records.length;
+  el.textContent=t?`Guardado \u00b7 ${t} atleta${t!==1?'s':''}, ${r} registro${r!==1?'s':''}.`:'Los datos se guardan autom\u00e1ticamente en este navegador.';
+}
+function confirmClearAll(){openModal('Borrar todos los datos','\u00bfEliminar todos los atletas y registros? Esta acci\u00f3n no se puede deshacer.',()=>{athletes=[];records=[];saveData();renderAll();});}
+function openModal(title,body,onConfirm){
+  document.getElementById('modal-title').textContent=title;
+  document.getElementById('modal-body').textContent=body;
+  document.getElementById('modal-confirm').onclick=()=>{onConfirm();closeModal();};
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeModal(){document.getElementById('modal-overlay').classList.remove('open');}
+document.getElementById('modal-overlay').addEventListener('click',e=>{if(e.target===document.getElementById('modal-overlay'))closeModal();});
+
+function err(id,msg){document.getElementById(id).textContent=msg;if(msg)setTimeout(()=>{document.getElementById(id).textContent='';},3500);}
+function evClass(name,event){const a=athletes.find(a=>a.name===name);return(!a||event===a.event1)?'ev-tag-1':'ev-tag-2';}
+function clampInput(el,min,max){const v=parseInt(el.value);if(!isNaN(v))el.value=Math.min(max,Math.max(min,v));}
+function recordSortKey(r){return MONTH_IDX[r.month]*31+(r.day-1);}
+
+function parseTimeInputs(){
+  const mm=parseInt(document.getElementById('inp-min').value)||0;
+  const ss=parseInt(document.getElementById('inp-sec').value)||0;
+  const ms=parseInt(document.getElementById('inp-ms').value)||0;
+  return mm*60000+ss*1000+ms;
+}
+function clearTimeInputs(){['inp-min','inp-sec','inp-ms'].forEach(id=>document.getElementById(id).value='');}
+function fmtTime(ms){
+  const t=Math.round(ms);
+  const mins=Math.floor(t/60000);
+  const secs=Math.floor((t%60000)/1000);
+  const msp=t%1000;
+  if(mins===0)return `${secs}.${String(msp).padStart(3,'0')}`;
+  return `${mins}:${String(secs).padStart(2,'0')}.${String(msp).padStart(3,'0')}`;
+}
+function fmtDiff(d){
+  const abs=Math.abs(Math.round(d));
+  const mins=Math.floor(abs/60000);
+  const secs=Math.floor((abs%60000)/1000);
+  const ms=abs%1000;
+  if(mins===0)return `${secs}.${String(ms).padStart(3,'0')}`;
+  return `${mins}:${String(secs).padStart(2,'0')}.${String(ms).padStart(3,'0')}`;
+}
+function impBadge(prev,curr){
+  if(prev===null)return '';
+  const d=curr-prev;
+  if(Math.abs(d)<10)return '<span class="badge-same">= igual</span>';
+  if(d<0)return `<span class="badge-better">\u25bc ${fmtDiff(d)} mejor</span>`;
+  return `<span class="badge-worse">\u25b2 ${fmtDiff(d)} peor</span>`;
+}
+
+function addAthlete(){
+  const name=document.getElementById('inp-name').value.trim();
+  const event1=document.getElementById('inp-event1').value.trim();
+  const event2=document.getElementById('inp-event2').value.trim();
+  if(!name)return err('error-athlete','Escribe el nombre del atleta.');
+  if(!event1)return err('error-athlete','Escribe la prueba 1.');
+  if(!event2)return err('error-athlete','Escribe la prueba 2.');
+  if(event1.toLowerCase()===event2.toLowerCase())return err('error-athlete','Las dos pruebas deben ser diferentes.');
+  if(athletes.find(a=>a.name.toLowerCase()===name.toLowerCase()))return err('error-athlete','Ya existe un atleta con ese nombre.');
+  athletes.push({name,event1,event2});
+  ['inp-name','inp-event1','inp-event2'].forEach(id=>document.getElementById(id).value='');
+  saveData();renderAthletes();updateSelects();updateFilterSelects();
+}
+function removeAthlete(name){
+  openModal(`Eliminar a ${name}`,`Se eliminar\u00e1n ${name} y todos sus ${records.filter(r=>r.name===name).length} registros. \u00bfContinuar?`,()=>{
+    athletes=athletes.filter(a=>a.name!==name);records=records.filter(r=>r.name!==name);saveData();renderAll();
+  });
+}
+function renderAthletes(){
+  const el=document.getElementById('athletes-list');
+  if(!athletes.length){el.innerHTML='';return;}
+  el.innerHTML=athletes.map(a=>`
+    <div class="athlete-row">
+      <div class="athlete-info">
+        <div class="aname">${a.name}</div>
+        <div class="ev-tags"><span class="ev-tag ev-tag-1">${a.event1}</span><span class="ev-tag ev-tag-2">${a.event2}</span></div>
+      </div>
+      <button class="del-btn" onclick="removeAthlete('${a.name.replace(/'/g,"\\'")}')">&#x2715;</button>
+    </div>`).join('');
+}
+function updateSelects(){
+  const sel=document.getElementById('inp-sel-name');const prev=sel.value;
+  sel.innerHTML='<option value="">\u2014 selecciona \u2014</option>'+athletes.map(a=>`<option value="${a.name}">${a.name}</option>`).join('');
+  if(prev&&athletes.find(a=>a.name===prev))sel.value=prev;
+  updateEventSelect();
+}
+function updateEventSelect(){
+  const name=document.getElementById('inp-sel-name').value;
+  const sel=document.getElementById('inp-sel-event');
+  const ath=athletes.find(a=>a.name===name);
+  if(!ath){sel.innerHTML='<option value="">\u2014 selecciona \u2014</option>';return;}
+  sel.innerHTML=`<option value="${ath.event1}">${ath.event1}</option><option value="${ath.event2}">${ath.event2}</option>`;
+}
+
+function addRecord(){
+  const name=document.getElementById('inp-sel-name').value;
+  const event=document.getElementById('inp-sel-event').value;
+  const day=parseInt(document.getElementById('inp-day').value);
+  const month=document.getElementById('inp-month').value;
+  const ss=parseInt(document.getElementById('inp-sec').value);
+  const ms=parseInt(document.getElementById('inp-ms').value);
+  if(!name)return err('error-record','Selecciona un atleta.');
+  if(!event)return err('error-record','Selecciona una prueba.');
+  if(isNaN(day)||day<1||day>31)return err('error-record','Ingresa un d\u00eda v\u00e1lido (1-31).');
+  if(isNaN(ss)&&isNaN(ms))return err('error-record','Ingresa al menos segundos o milisegundos.');
+  const totalMs=parseTimeInputs();
+  if(totalMs<=0)return err('error-record','El tiempo debe ser mayor a cero.');
+  records.push({id:Date.now(),name,event,day,month,time:totalMs});
+  document.getElementById('inp-day').value='';
+  clearTimeInputs();
+  saveData();renderTable();renderCharts();updateFilterSelects();
+}
+function deleteRecord(id){
+  openModal('Eliminar registro','\u00bfEliminar este registro?',()=>{
+    records=records.filter(r=>r.id!==id);saveData();renderTable();renderCharts();
+  });
+}
+
+function updateFilterSelects(){
+  const fa=document.getElementById('filter-athlete');
+  const fe=document.getElementById('filter-event');
+  const prevA=fa.value,prevE=fe.value;
+  const names=[...new Set(records.map(r=>r.name))];
+  const events=[...new Set(records.map(r=>r.event))];
+  fa.innerHTML='<option value="">Todos los atletas</option>'+names.map(n=>`<option value="${n}">${n}</option>`).join('');
+  fe.innerHTML='<option value="">Todas las pruebas</option>'+events.map(e=>`<option value="${e}">${e}</option>`).join('');
+  if(names.includes(prevA))fa.value=prevA;
+  if(events.includes(prevE))fe.value=prevE;
+}
+function getFiltered(){
+  const fa=document.getElementById('filter-athlete').value;
+  const fe=document.getElementById('filter-event').value;
+  const fm=document.getElementById('filter-month').value;
+  return records.filter(r=>(!fa||r.name===fa)&&(!fe||r.event===fe)&&(!fm||r.month===fm));
+}
+function setSort(col){
+  if(sortCol===col)sortDir=sortDir==='asc'?'desc':'asc';else{sortCol=col;sortDir='asc';}
+  renderTable();
+}
+function sIcon(col){
+  if(sortCol!==col)return '<span class="sort-icon">\u21c5</span>';
+  return `<span class="sort-icon">${sortDir==='asc'?'\u2191':'\u2193'}</span>`;
+}
+function sortRecs(recs){
+  return[...recs].sort((a,b)=>{
+    let va,vb;
+    if(sortCol==='date'){va=recordSortKey(a);vb=recordSortKey(b);}
+    else if(sortCol==='name'){va=a.name;vb=b.name;}
+    else if(sortCol==='event'){va=a.event;vb=b.event;}
+    else if(sortCol==='time'){va=a.time;vb=b.time;}
+    else{va=0;vb=0;}
+    if(va<vb)return sortDir==='asc'?-1:1;
+    if(va>vb)return sortDir==='asc'?1:-1;
+    return 0;
+  });
+}
+function renderTable(){
+  const area=document.getElementById('table-area');
+  const filtered=getFiltered();
+  if(!filtered.length){area.innerHTML='<div class="empty" style="margin:1rem 1.5rem;"><div class="empty-icon">\ud83d\udccb</div>Sin registros para los filtros seleccionados.</div>';return;}
+  const allByKey={};
+  records.forEach(r=>{const k=r.name+'||'+r.event;if(!allByKey[k])allByKey[k]=[];allByKey[k].push(r);});
+  Object.keys(allByKey).forEach(k=>allByKey[k].sort((a,b)=>recordSortKey(a)-recordSortKey(b)));
+  const prMap={};
+  Object.keys(allByKey).forEach(k=>{prMap[k]=Math.min(...allByKey[k].map(r=>r.time));});
+  let html=`<table><thead><tr>
+    <th onclick="setSort('name')" class="${sortCol==='name'?'sorted':''}">Atleta ${sIcon('name')}</th>
+    <th onclick="setSort('event')" class="${sortCol==='event'?'sorted':''}">Prueba ${sIcon('event')}</th>
+    <th onclick="setSort('date')" class="${sortCol==='date'?'sorted':''}">Fecha ${sIcon('date')}</th>
+    <th onclick="setSort('time')" class="${sortCol==='time'?'sorted':''}">Tiempo ${sIcon('time')}</th>
+    <th>Cambio</th><th></th>
+  </tr></thead><tbody>`;
+  sortRecs(filtered).forEach(r=>{
+    const k=r.name+'||'+r.event;
+    const idx=allByKey[k].findIndex(x=>x.id===r.id);
+    const prev=idx>0?allByKey[k][idx-1].time:null;
+    const isPR=r.time===prMap[k]&&allByKey[k].length>1;
+    html+=`<tr>
+      <td>${r.name}</td>
+      <td><span class="ev-tag ${evClass(r.name,r.event)}">${r.event}</span></td>
+      <td>${r.day} ${r.month}</td>
+      <td>${fmtTime(r.time)}${isPR?'<span class="pr-badge">\u2605 PR</span>':''}</td>
+      <td>${impBadge(prev,r.time)}</td>
+      <td><button class="del-btn" onclick="deleteRecord(${r.id})" title="Eliminar">&#x2715;</button></td>
+    </tr>`;
+  });
+  html+='</tbody></table>';
+  area.innerHTML=html;
+}
+
+function getTabKeys(){const keys=new Set();records.forEach(r=>keys.add(r.name+'\u2014'+r.event));return[...keys];}
+function rechartActive(){if(activeTab)drawChart(activeTab,document.getElementById('chart-area'));}
+
+function renderCharts(){
+  const keys=getTabKeys();
+  const tabsArea=document.getElementById('tabs-area');
+  const chartArea=document.getElementById('chart-area');
+  const hint=document.getElementById('chart-hint');
+  const controls=document.getElementById('chart-controls');
+  if(!keys.length){
+    tabsArea.innerHTML='';
+    chartArea.innerHTML='<div class="empty"><div class="empty-icon">\ud83d\udcc8</div>Agrega al menos dos tiempos de la misma prueba para ver la gr\u00e1fica.</div>';
+    hint.style.display='none';controls.style.display='none';
+    if(chartInstance){chartInstance.destroy();chartInstance=null;}
+    activeTab=null;return;
+  }
+  if(!activeTab||!keys.includes(activeTab))activeTab=keys[0];
+  tabsArea.innerHTML=keys.map(k=>{
+    const sep=k.indexOf('\u2014');const n=k.slice(0,sep),e=k.slice(sep+1);
+    const cls=evClass(n,e);
+    return `<button class="tab ${k===activeTab?'active':''}" onclick="switchTab('${k.replace(/'/g,"\\'")}')">
+      <span class="ev-tag ${cls}" style="padding:1px 6px;">${e}</span> ${n}
+    </button>`;
+  }).join('');
+  drawChart(activeTab,chartArea);
+  hint.style.display='block';controls.style.display='flex';
+}
+function switchTab(key){activeTab=key;renderCharts();}
+
+function drawChart(key,area){
+  if(chartInstance){chartInstance.destroy();chartInstance=null;}
+  const sep=key.indexOf('\u2014');const name=key.slice(0,sep),event=key.slice(sep+1);
+  const onlyBest=document.getElementById('chk-best-month').checked;
+  let group=records.filter(r=>r.name===name&&r.event===event).sort((a,b)=>recordSortKey(a)-recordSortKey(b));
+  if(onlyBest){
+    const byMonth={};
+    group.forEach(r=>{if(!byMonth[r.month]||r.time<byMonth[r.month].time)byMonth[r.month]=r;});
+    group=MONTHS.map(m=>byMonth[m]).filter(Boolean);
+  }
+  if(group.length<2){area.innerHTML='<div class="empty"><div class="empty-icon">\ud83d\udcca</div>Se necesitan al menos 2 registros para graficar esta prueba.</div>';return;}
+  const labels=group.map(r=>onlyBest?r.month:`${r.day} ${r.month}`);
+  const times=group.map(r=>r.time);
+  const minT=Math.min(...times),maxT=Math.max(...times);
+  const pad=Math.max((maxT-minT)*.5,100);
+  const isEv1=evClass(name,event)==='ev-tag-1';
+  const lineClr=isEv1?'#4f9cf9':'#2ecf96';
+  const fillClr=isEv1?'rgba(79,156,249,.07)':'rgba(46,207,150,.07)';
+  area.innerHTML=`<div class="chart-container"><canvas id="progressChart"></canvas></div>`;
+  chartInstance=new Chart(document.getElementById('progressChart'),{
+    type:'line',
+    data:{labels,datasets:[{
+      label:event,data:times,borderColor:lineClr,backgroundColor:fillClr,
+      pointBackgroundColor:times.map(t=>t===minT?'#3ecf70':lineClr),
+      pointBorderColor:times.map(t=>t===minT?'#3ecf70':lineClr),
+      pointRadius:times.map(t=>t===minT?9:5),
+      pointHoverRadius:11,fill:true,tension:.35,borderWidth:2.5,
+    }]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor:'#1a1f2e',borderColor:'rgba(255,255,255,.1)',borderWidth:1,
+          titleColor:'#e8eaf0',bodyColor:'#8b90a0',padding:12,
+          callbacks:{
+            label:c=>{const t=c.parsed.y;return ` ${fmtTime(t)}${t===minT?'  \u2605 R\u00e9cord personal':''}`;},
+            afterLabel:c=>{
+              const i=c.dataIndex;if(i===0)return '';
+              const d=times[i]-times[i-1];
+              if(Math.abs(d)<10)return ' Sin cambio';
+              return d<0?` \u25bc Mejor\u00f3 ${fmtDiff(d)}`:`\u25b2 Retrocedi\u00f3 ${fmtDiff(d)}`;
+            }
+          }
+        }
+      },
+      scales:{
+        y:{
+          reverse:true,min:Math.round(minT-pad),max:Math.round(maxT+pad),
+          ticks:{callback:v=>fmtTime(v),font:{size:11,family:'Barlow'},color:'#555c72',maxTicksLimit:6},
+          grid:{color:'rgba(255,255,255,.04)'},
+          title:{display:true,text:'\u2190 m\u00e1s lento    m\u00e1s r\u00e1pido \u2192',font:{size:11,family:'Barlow'},color:'#555c72'}
+        },
+        x:{ticks:{font:{size:11,family:'Barlow Condensed'},color:'#555c72',autoSkip:true,maxRotation:45,maxTicksLimit:14},grid:{display:false}}
+      }
+    }
+  });
+}
+
+function renderAll(){renderAthletes();updateSelects();updateFilterSelects();renderTable();renderCharts();updateBanner();}
+loadData();
+renderAll();
+</script>
+<style>
+  :root {
+    --bg:        #0b0e14;
+    --bg2:       #12151e;
+    --bg3:       #1a1f2e;
+    --border:    rgba(255,255,255,0.07);
+    --border2:   rgba(255,255,255,0.13);
+    --text:      #e8eaf0;
+    --text2:     #8b90a0;
+    --text3:     #555c72;
+    --accent1:   #4f9cf9;
+    --accent2:   #2ecf96;
+    --gold:      #f5c842;
+    --red:       #f05a5a;
+    --green:     #3ecf70;
+    --radius:    10px;
+    --radius-lg: 16px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Barlow', sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ─── HEADER ─── */
+  header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 800;
+    font-size: 22px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent1); box-shadow: 0 0 12px var(--accent1); }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .header-tag { font-size: 12px; color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; }
+
+  /* ─── LAYOUT ─── */
+  .page { max-width: 960px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }
+
+  /* ─── INSTRUCCIONES ─── */
+  .instructions {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem 2rem;
+    margin-bottom: 2.5rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .instructions::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 4px; height: 100%;
+    background: linear-gradient(180deg, var(--accent1), var(--accent2));
+    border-radius: 4px 0 0 4px;
+  }
+  .instr-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent1);
+    margin-bottom: 1rem;
+  }
+  .instr-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; }
+  .instr-step { display: flex; gap: 12px; align-items: flex-start; }
+  .step-num { font-family: 'Barlow Condensed', sans-serif; font-size: 28px; font-weight: 800; line-height: 1; color: var(--accent1); opacity: 0.25; min-width: 28px; }
+  .step-body strong { font-weight: 600; color: var(--text); font-size: 14px; display: block; margin-bottom: 2px; }
+  .step-body span { font-size: 13px; color: var(--text2); }
+
+  /* ─── SECTION LABEL ─── */
+  .section-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px; font-weight: 700;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--text3); margin-bottom: 0.75rem;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* ─── CARD ─── */
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem; margin-bottom: 2rem; }
+
+  /* ─── FORM ─── */
+  .form-grid { display: grid; gap: 12px; }
+  .fg-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .fg-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .fg-5 { grid-template-columns: 1.4fr 1.4fr 0.7fr 0.9fr 1.6fr; }
+  @media (max-width: 700px) { .fg-3, .fg-4, .fg-5 { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 420px) { .fg-3, .fg-4, .fg-5 { grid-template-columns: 1fr; } }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); }
+  input[type="text"], input[type="number"], select {
+    background: var(--bg3); border: 1px solid var(--border2);
+    border-radius: var(--radius); color: var(--text);
+    font-family: 'Barlow', sans-serif; font-size: 14px;
+    padding: 9px 12px; outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s; width: 100%; -webkit-appearance: none;
+  }
+  input:focus, select:focus { border-color: var(--accent1); box-shadow: 0 0 0 3px rgba(79,156,249,0.12); }
+  select option { background: var(--bg3); }
+
+  /* ─── BUTTONS ─── */
+  .btn {
+    font-family: 'Barlow Condensed', sans-serif; font-weight: 700;
+    font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 10px 20px; border-radius: var(--radius); border: none;
+    cursor: pointer; transition: all 0.15s;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--accent1); color: #0b0e14; }
+  .btn-primary:hover { background: #72b4ff; }
+  .btn-secondary { background: var(--bg3); color: var(--text2); border: 1px solid var(--border2); }
+  .btn-secondary:hover { border-color: var(--accent1); color: var(--accent1); }
+  .btn-danger { background: rgba(240,90,90,0.1); color: var(--red); border: 1px solid rgba(240,90,90,0.25); }
+  .btn-danger:hover { background: rgba(240,90,90,0.2); }
+  .btn-full { width: 100%; justify-content: center; margin-top: 4px; }
+  .del-btn { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 16px; padding: 2px 6px; border-radius: 6px; transition: all 0.15s; }
+  .del-btn:hover { color: var(--red); background: rgba(240,90,90,0.1); }
+
+  /* ─── STORAGE BANNER ─── */
+  .storage-banner {
+    display: flex; align-items: center; justify-content: space-between;
+    background: rgba(79,156,249,0.07); border: 1px solid rgba(79,156,249,0.2);
+    border-radius: var(--radius); padding: 10px 14px; margin-bottom: 1.5rem;
+    font-size: 13px; color: var(--text2); gap: 12px; flex-wrap: wrap;
+  }
+  .storage-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent2); box-shadow: 0 0 6px var(--accent2); flex-shrink: 0; }
+  .storage-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* ─── ERROR ─── */
+  .error-msg { font-size: 12px; color: var(--red); min-height: 18px; margin-top: 8px; }
+
+  /* ─── ATHLETE PILLS ─── */
+  .athletes-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .athlete-row {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 10px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    animation: fadeIn 0.25s ease;
+  }
+  .athlete-info .aname { font-weight: 600; font-size: 14px; color: var(--text); margin-bottom: 4px; }
+  .ev-tags { display: flex; gap: 6px; }
+  .ev-tag { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; }
+  .ev-tag-1 { background: rgba(79,156,249,0.15); color: var(--accent1); }
+  .ev-tag-2 { background: rgba(46,207,150,0.15); color: var(--accent2); }
+
+  /* ─── TABLE ─── */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--text3);
+    padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  tbody tr { transition: background 0.1s; }
+  tbody tr:hover { background: rgba(255,255,255,0.025); }
+  tbody td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text2); }
+  tbody td:first-child { color: var(--text); font-weight: 500; }
+  .badge-better { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: rgba(62,207,112,0.12); color: var(--green); white-space: nowrap; }
+  .badge-worse  { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: rgba(240,90,90,0.12);  color: var(--red);   white-space: nowrap; }
+  .badge-same   { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: var(--bg3); color: var(--text3); }
+  .pr-badge { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; background: rgba(245,200,66,0.15); color: var(--gold); margin-left: 5px; letter-spacing: 0.06em; }
+
+  /* ─── TABS ─── */
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.25rem; }
+  .tab {
+    font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase; padding: 7px 16px;
+    border-radius: 8px; border: 1px solid var(--border2); background: transparent;
+    color: var(--text2); cursor: pointer; transition: all 0.15s;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .tab:hover { border-color: var(--accent1); color: var(--text); }
+  .tab.active { background: var(--bg3); color: var(--text); border-color: var(--accent1); box-shadow: 0 0 0 1px var(--accent1); }
+
+  /* ─── CHART ─── */
+  .chart-container { position: relative; width: 100%; height: 320px; }
+  .chart-hint { text-align: right; font-size: 12px; color: var(--text3); margin-top: 8px; }
+
+  /* ─── EMPTY ─── */
+  .empty { text-align: center; color: var(--text3); font-size: 14px; padding: 2.5rem 1rem; border: 1px dashed var(--border2); border-radius: var(--radius); }
+  .empty-icon { font-size: 28px; margin-bottom: 8px; }
+
+  /* ─── MODAL ─── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7); z-index: 200;
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--bg2); border: 1px solid var(--border2);
+    border-radius: var(--radius-lg); padding: 2rem; max-width: 380px; width: 90%;
+    animation: fadeIn 0.2s ease;
+  }
+  .modal h3 { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+  .modal p  { font-size: 14px; color: var(--text2); margin-bottom: 1.5rem; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+
+  /* ─── FILTROS ─── */
+  .table-filters { display: flex; gap: 8px; flex-wrap: wrap; padding: 1rem 1.5rem 0.5rem; }
+  .filter-select { font-family: 'Barlow', sans-serif; font-size: 12px; background: var(--bg3); border: 1px solid var(--border2); border-radius: 6px; color: var(--text2); padding: 5px 10px; outline: none; cursor: pointer; }
+  .filter-select:focus { border-color: var(--accent1); }
+  .date-cell { white-space: nowrap; }
+  thead th { cursor: pointer; user-select: none; }
+  thead th:hover { color: var(--text2); }
+  .sort-icon { margin-left: 4px; opacity: .4; font-size: 10px; }
+  thead th.sorted .sort-icon { opacity: 1; color: var(--accent1); }
+  /* chart controls */
+  .chart-controls { display: flex; align-items: center; gap: 14px; margin-bottom: 1rem; flex-wrap: wrap; padding: 8px 12px; background: var(--bg3); border-radius: var(--radius); border: 1px solid var(--border); }
+  .chart-controls label { font-size: 13px; color: var(--text2); display: flex; align-items: center; gap: 7px; cursor: pointer; }
+  .chart-controls input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent1); cursor: pointer; }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    AtleteTrack
+  </div>
+  <div class="header-right">
+    <span class="header-tag">Registro de marcas</span>
+  </div>
+</header>
+
+<!-- MODAL CONFIRMAR ELIMINAR -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <h3 id="modal-title">Eliminar atleta</h3>
+    <p id="modal-body">¿Estás seguro? Se eliminarán todos los registros de este atleta.</p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-danger" id="modal-confirm">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+
+  <!-- INSTRUCCIONES -->
+  <div class="instructions">
+    <div class="instr-title">¿Cómo usar esta herramienta?</div>
+    <div class="instr-steps">
+      <div class="instr-step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>Registra al atleta</strong>
+          <span>Ingresa el nombre y define sus dos pruebas (ej. 100m y 200m planos).</span>
+        </div>
+      </div>
+      <div class="instr-step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong>Captura los tiempos</strong>
+          <span>Selecciona atleta, prueba, día y mes. Puedes registrar varias marcas por mes.</span>
+        </div>
+      </div>
+      <div class="instr-step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>Visualiza el progreso</strong>
+          <span>La gráfica muestra la evolución mes a mes. La línea que sube indica mejora (menor tiempo).</span>
+        </div>
+      </div>
+      <div class="instr-step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <strong>Interpreta los colores</strong>
+          <span>Verde = mejoró · Rojo = retrocedió · ★ PR = récord personal del atleta.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BANNER STORAGE + EXPORTAR -->
+  <div class="storage-banner">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div class="storage-dot"></div>
+      <span id="storage-status">Los datos se guardan automáticamente en este navegador.</span>
+    </div>
+    <div class="storage-actions">
+      <button class="btn btn-danger" onclick="confirmClearAll()">✕ Borrar todo</button>
+    </div>
+  </div>
+
+  <!-- PASO 1 -->
+  <div class="section-label">Paso 1 — Configurar atleta</div>
+  <div class="card">
+    <div class="form-grid fg-3">
+      <div class="field">
+        <label>Nombre del atleta</label>
+        <input type="text" id="inp-name" placeholder="Ej. Alison" />
+      </div>
+      <div class="field">
+        <label>Prueba 1</label>
+        <input type="text" id="inp-event1" placeholder="Ej. 100m planos" />
+      </div>
+      <div class="field">
+        <label>Prueba 2</label>
+        <input type="text" id="inp-event2" placeholder="Ej. 200m planos" />
+      </div>
+    </div>
+    <button class="btn btn-primary btn-full" onclick="addAthlete()">+ Registrar atleta</button>
+    <div class="error-msg" id="error-athlete"></div>
+    <div class="athletes-list" id="athletes-list"></div>
+  </div>
+
+  <!-- PASO 2 -->
+  <div class="section-label">Paso 2 — Capturar tiempo</div>
+  <div class="card">
+    <div class="form-grid fg-5">
+      <div class="field">
+        <label>Atleta</label>
+        <select id="inp-sel-name" onchange="updateEventSelect()">
+          <option value="">— selecciona —</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Prueba</label>
+        <select id="inp-sel-event">
+          <option value="">— selecciona —</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Día</label>
+        <input type="number" id="inp-day" placeholder="dd" min="1" max="31" step="1"
+          style="text-align:center;" oninput="clampInput(this,1,31)" />
+      </div>
+      <div class="field">
+        <label>Mes</label>
+        <select id="inp-month">
+          <option>Enero</option><option>Febrero</option><option>Marzo</option>
+          <option>Abril</option><option>Mayo</option><option>Junio</option>
+          <option>Julio</option><option>Agosto</option><option>Septiembre</option>
+          <option>Octubre</option><option>Noviembre</option><option>Diciembre</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Tiempo &nbsp;<span style="font-weight:400;font-size:10px;opacity:.6;text-transform:none;letter-spacing:0">mm : ss . ms</span></label>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <input type="number" id="inp-min" placeholder="mm" min="0" max="59" step="1"
+            style="width:52px;text-align:center;padding:9px 6px;flex-shrink:0;" oninput="clampInput(this,0,59)" />
+          <span style="color:var(--text3);font-size:20px;font-weight:700;padding-bottom:2px;">:</span>
+          <input type="number" id="inp-sec" placeholder="ss" min="0" max="59" step="1"
+            style="width:52px;text-align:center;padding:9px 6px;flex-shrink:0;" oninput="clampInput(this,0,59)" />
+          <span style="color:var(--text3);font-size:20px;font-weight:700;padding-bottom:2px;">.</span>
+          <input type="number" id="inp-ms" placeholder="ms" min="0" max="999" step="1"
+            style="width:62px;text-align:center;padding:9px 6px;flex-shrink:0;" oninput="clampInput(this,0,999)" />
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-full" onclick="addRecord()">+ Agregar tiempo</button>
+    <div class="error-msg" id="error-record"></div>
+  </div>
+
+  <hr class="divider" />
+
+  <!-- TABLA -->
+  <div class="section-label">Registros capturados</div>
+  <div class="card" style="padding:0.5rem 0;">
+    <div class="table-filters">
+      <select class="filter-select" id="filter-athlete" onchange="renderTable()"><option value="">Todos los atletas</option></select>
+      <select class="filter-select" id="filter-event" onchange="renderTable()"><option value="">Todas las pruebas</option></select>
+      <select class="filter-select" id="filter-month" onchange="renderTable()">
+        <option value="">Todos los meses</option>
+        <option>Enero</option><option>Febrero</option><option>Marzo</option><option>Abril</option>
+        <option>Mayo</option><option>Junio</option><option>Julio</option><option>Agosto</option>
+        <option>Septiembre</option><option>Octubre</option><option>Noviembre</option><option>Diciembre</option>
+      </select>
+    </div>
+    <div class="table-wrap" id="table-area">
+      <div class="empty" style="margin:1rem 1.5rem;">
+        <div class="empty-icon">📋</div>
+        Sin registros aún. Completa los pasos anteriores.
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider" />
+
+  <!-- GRÁFICA -->
+  <div class="section-label">Gráfica de progreso</div>
+  <div class="card">
+    <div class="tabs" id="tabs-area"></div>
+    <div class="chart-controls" id="chart-controls" style="display:none;">
+      <label><input type="checkbox" id="chk-best-month" onchange="rechartActive()" /> Mostrar solo mejor marca por mes</label>
+    </div>
     <div id="chart-area">
       <div class="empty">
         <div class="empty-icon">📈</div>
